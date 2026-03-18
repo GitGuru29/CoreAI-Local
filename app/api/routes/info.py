@@ -42,6 +42,8 @@ async def read_server_info(
             "models",
             "health",
             "info",
+            "summarize",
+            "analyze-code",
             "model-validation",
             "structured-errors",
             "file-logging",
