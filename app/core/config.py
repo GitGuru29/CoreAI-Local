@@ -1,0 +1,43 @@
+from functools import lru_cache
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    app_name: str = Field(default="CoreAI Local")
+    app_version: str = Field(default="0.1.0")
+    api_host: str = Field(default="0.0.0.0")
+    api_port: int = Field(default=8000, ge=1, le=65535)
+    log_level: str = Field(default="INFO")
+    ollama_base_url: str = Field(default="http://localhost:11434")
+    ollama_timeout: float = Field(default=60.0, gt=0)
+    default_model: str = Field(default="qwen2.5-coder:7b")
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    @field_validator("log_level")
+    @classmethod
+    def normalize_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        valid_levels = {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}
+        if normalized not in valid_levels:
+            raise ValueError(
+                f"LOG_LEVEL must be one of: {', '.join(sorted(valid_levels))}",
+            )
+        return normalized
+
+    @field_validator("ollama_base_url")
+    @classmethod
+    def normalize_ollama_base_url(cls, value: str) -> str:
+        return value.rstrip("/")
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
