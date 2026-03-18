@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000, ge=1, le=65535)
     log_level: str = Field(default="INFO")
+    log_dir: str = Field(default="logs")
+    log_file: str = Field(default="server.log")
     ollama_base_url: str = Field(default="http://localhost:11434")
     ollama_timeout: float = Field(default=60.0, gt=0)
     default_model: str = Field(default="qwen2.5-coder:7b")
@@ -19,6 +21,11 @@ class Settings(BaseSettings):
     max_text_chars: int = Field(default=24000, ge=1)
     max_code_chars: int = Field(default=32000, ge=1)
     max_task_chars: int = Field(default=1000, ge=1)
+    rate_limit_requests: int = Field(default=30, ge=1)
+    rate_limit_window_seconds: int = Field(default=60, ge=1)
+    max_concurrent_ai_requests: int = Field(default=2, ge=1)
+    queue_wait_timeout: float = Field(default=5.0, gt=0)
+    cors_allowed_origins: str = Field(default="")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -42,6 +49,10 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_ollama_base_url(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
 
 @lru_cache

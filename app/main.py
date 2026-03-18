@@ -3,15 +3,18 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.error_handlers import app_error_handler, validation_exception_handler
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.core.middleware import AccessLogMiddleware
+from app.services.request_guard import RequestGuardService
 from app.utils.errors import AppError
 
-setup_logging(get_settings().log_level)
+_settings = get_settings()
+setup_logging(_settings.log_level, _settings.log_dir, _settings.log_file)
 logger = get_logger(__name__)
 
 
@@ -20,6 +23,12 @@ async def lifespan(application: FastAPI):
     settings = get_settings()
     application.state.settings = settings
     application.state.http_client = httpx.AsyncClient()
+    application.state.request_guard = RequestGuardService(
+        max_requests=settings.rate_limit_requests,
+        window_seconds=settings.rate_limit_window_seconds,
+        max_concurrent_requests=settings.max_concurrent_ai_requests,
+        acquire_timeout=settings.queue_wait_timeout,
+    )
     logger.info(
         "Starting %s on %s:%s",
         settings.app_name,
@@ -43,6 +52,14 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
         lifespan=lifespan,
     )
+    if settings.cors_origin_list:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origin_list,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["*"],
+        )
     application.add_middleware(AccessLogMiddleware)
     application.add_exception_handler(AppError, app_error_handler)
     application.add_exception_handler(Exception, app_error_handler)

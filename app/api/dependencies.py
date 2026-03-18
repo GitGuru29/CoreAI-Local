@@ -2,6 +2,7 @@ from fastapi import Request
 
 from app.core.config import Settings
 from app.services.ollama import OllamaService
+from app.services.request_guard import RequestGuardService
 
 
 def get_settings_from_app(request: Request) -> Settings:
@@ -15,3 +16,7 @@ def get_ollama_service(request: Request) -> OllamaService:
         timeout=settings.ollama_timeout,
         http_client=request.app.state.http_client,
     )
+
+
+def get_request_guard(request: Request) -> RequestGuardService:
+    return request.app.state.request_guard

@@ -5,6 +5,7 @@ import httpx
 from app.api.dependencies import get_ollama_service
 from app.core.config import get_settings
 from app.main import app
+from app.services.request_guard import RequestGuardService
 from app.utils.errors import ModelNotInstalledError, OllamaConnectionError
 
 
@@ -70,6 +71,12 @@ class ApiRoutesTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         app.state.settings = get_settings()
         app.state.http_client = None
+        app.state.request_guard = RequestGuardService(
+            max_requests=30,
+            window_seconds=60,
+            max_concurrent_requests=2,
+            acquire_timeout=5,
+        )
         transport = httpx.ASGITransport(app=app)
         self.client = httpx.AsyncClient(transport=transport, base_url="http://testserver")
 

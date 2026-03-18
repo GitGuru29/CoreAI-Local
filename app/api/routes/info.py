@@ -44,6 +44,8 @@ async def read_server_info(
             "info",
             "model-validation",
             "structured-errors",
+            "file-logging",
+            "request-guard",
         ],
         detail=detail,
     )

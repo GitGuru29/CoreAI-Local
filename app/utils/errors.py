@@ -63,6 +63,32 @@ class ModelNotInstalledError(AppError):
         )
 
 
+class RateLimitError(AppError):
+    def __init__(self, max_requests: int, window_seconds: int) -> None:
+        super().__init__(
+            "Rate limit exceeded for this client.",
+            status_code=429,
+            code="rate_limited",
+            details={
+                "max_requests": max_requests,
+                "window_seconds": window_seconds,
+            },
+        )
+
+
+class QueueFullError(AppError):
+    def __init__(self, max_concurrent_requests: int, wait_timeout: float) -> None:
+        super().__init__(
+            "The local generation queue is full. Retry shortly.",
+            status_code=503,
+            code="queue_full",
+            details={
+                "max_concurrent_requests": max_concurrent_requests,
+                "wait_timeout_seconds": wait_timeout,
+            },
+        )
+
+
 class OllamaConnectionError(AppError):
     def __init__(
         self,
