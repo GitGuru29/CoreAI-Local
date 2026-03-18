@@ -1,26 +1,39 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.api.dependencies import get_ollama_service, get_settings_from_app
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.ollama import OllamaService
+from app.utils.guards import enforce_max_length
 
 router = APIRouter(tags=["chat"])
+logger = get_logger(__name__)
 
 
 @router.post("/chat", response_model=ChatResponse, summary="Generate a response")
 async def create_chat_completion(
     payload: ChatRequest,
+    request: Request,
     settings: Settings = Depends(get_settings_from_app),
     ollama_service: OllamaService = Depends(get_ollama_service),
 ) -> ChatResponse:
     model_name = payload.model or settings.default_model
+    request.state.selected_model = model_name
+    enforce_max_length("prompt", payload.prompt, settings.max_prompt_chars)
+    await ollama_service.ensure_model_available(model_name)
     result = await ollama_service.generate(
         prompt=payload.prompt,
         model=model_name,
         system_prompt=payload.system_prompt,
         temperature=payload.temperature,
         keep_alive=payload.keep_alive,
+    )
+    logger.info(
+        "chat request completed client_ip=%s model=%s prompt_chars=%s",
+        request.client.host if request.client else "unknown",
+        model_name,
+        len(payload.prompt),
     )
     return ChatResponse(
         model=result.get("model", model_name),

@@ -30,6 +30,14 @@ class ChatRequest(BaseModel):
             raise ValueError("Prompt must not be empty.")
         return trimmed
 
+    @field_validator("model", "system_prompt", "keep_alive")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
 
 class ChatResponse(BaseModel):
     model: str

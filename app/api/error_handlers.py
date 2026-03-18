@@ -11,17 +11,19 @@ logger = get_logger(__name__)
 async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
     if isinstance(exc, AppError):
         status_code = exc.status_code
-        detail = exc.detail
+        content = {"error": exc.error, "code": exc.code}
+        if exc.details:
+            content["details"] = exc.details
     else:
         status_code = 500
-        detail = "Internal server error."
+        content = {"error": "Internal server error.", "code": "internal_server_error"}
         logger.exception(
             "Unhandled error on %s %s",
             request.method,
             request.url.path,
         )
 
-    return JSONResponse(status_code=status_code, content={"detail": detail})
+    return JSONResponse(status_code=status_code, content=content)
 
 
 async def validation_exception_handler(
@@ -33,4 +35,11 @@ async def validation_exception_handler(
         request.method,
         request.url.path,
     )
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Invalid request payload.",
+            "code": "validation_error",
+            "details": exc.errors(),
+        },
+    )

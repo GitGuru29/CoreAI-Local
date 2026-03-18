@@ -7,12 +7,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = Field(default="CoreAI Local")
     app_version: str = Field(default="0.1.0")
+    app_env: str = Field(default="development")
+    server_mode: str = Field(default="offline-local")
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000, ge=1, le=65535)
     log_level: str = Field(default="INFO")
     ollama_base_url: str = Field(default="http://localhost:11434")
     ollama_timeout: float = Field(default=60.0, gt=0)
     default_model: str = Field(default="qwen2.5-coder:7b")
+    max_prompt_chars: int = Field(default=12000, ge=1)
+    max_text_chars: int = Field(default=24000, ge=1)
+    max_code_chars: int = Field(default=32000, ge=1)
+    max_task_chars: int = Field(default=1000, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

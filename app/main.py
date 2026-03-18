@@ -11,13 +11,13 @@ from app.core.logging import get_logger, setup_logging
 from app.core.middleware import AccessLogMiddleware
 from app.utils.errors import AppError
 
+setup_logging(get_settings().log_level)
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     settings = get_settings()
-    setup_logging(settings.log_level)
     application.state.settings = settings
     application.state.http_client = httpx.AsyncClient()
     logger.info(

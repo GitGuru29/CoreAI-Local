@@ -3,7 +3,12 @@ from typing import Any
 import httpx
 
 from app.core.logging import get_logger
-from app.utils.errors import OllamaConnectionError, OllamaUpstreamError
+from app.utils.errors import (
+    ModelNotInstalledError,
+    OllamaConnectionError,
+    OllamaTimeoutError,
+    OllamaUpstreamError,
+)
 
 logger = get_logger(__name__)
 
@@ -26,6 +31,20 @@ class OllamaService:
         if not isinstance(models, list):
             raise OllamaUpstreamError("Ollama returned an invalid models payload.")
         return models
+
+    async def list_model_names(self) -> list[str]:
+        return self.model_names_from_models(await self.list_models())
+
+    async def ensure_model_available(self, model: str) -> list[str]:
+        model_names = await self.list_model_names()
+        if model not in model_names:
+            raise ModelNotInstalledError(model, available_models=model_names)
+        return model_names
+
+    async def get_version(self) -> str | None:
+        payload = await self._request("GET", "/api/version")
+        version = payload.get("version")
+        return version if isinstance(version, str) else None
 
     async def generate(
         self,
@@ -58,12 +77,16 @@ class OllamaService:
     ) -> dict[str, Any]:
         url = f"{self.base_url}{path}"
         try:
+            logger.debug("Sending Ollama request %s %s", method, path)
             response = await self.http_client.request(
                 method=method,
                 url=url,
                 json=payload,
                 timeout=self.timeout,
             )
+        except httpx.TimeoutException as exc:
+            logger.error("Ollama timed out after %s seconds for %s", self.timeout, url)
+            raise OllamaTimeoutError(self.timeout) from exc
         except httpx.RequestError as exc:
             logger.error("Unable to reach Ollama at %s: %s", url, exc)
             raise OllamaConnectionError(
@@ -94,6 +117,15 @@ class OllamaService:
         if not isinstance(data, dict):
             raise OllamaUpstreamError("Ollama returned an invalid response payload.")
         return data
+
+    @staticmethod
+    def model_names_from_models(models: list[dict[str, Any]]) -> list[str]:
+        names: list[str] = []
+        for model in models:
+            name = model.get("name") or model.get("model")
+            if isinstance(name, str) and name:
+                names.append(name)
+        return names
 
     @staticmethod
     def _extract_error_detail(response: httpx.Response) -> str:
