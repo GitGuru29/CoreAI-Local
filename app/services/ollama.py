@@ -1,3 +1,5 @@
+import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -55,19 +57,74 @@ class OllamaService:
         temperature: float | None = None,
         keep_alive: str | None = None,
     ) -> dict[str, Any]:
-        request_payload: dict[str, Any] = {
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-        }
-        if system_prompt:
-            request_payload["system"] = system_prompt
-        if keep_alive:
-            request_payload["keep_alive"] = keep_alive
-        if temperature is not None:
-            request_payload["options"] = {"temperature": temperature}
-
+        request_payload = self._build_generate_payload(
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            keep_alive=keep_alive,
+            stream=False,
+        )
         return await self._request("POST", "/api/generate", request_payload)
+
+    def stream_generate(
+        self,
+        *,
+        prompt: str,
+        model: str,
+        system_prompt: str | None = None,
+        temperature: float | None = None,
+        keep_alive: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        request_payload = self._build_generate_payload(
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            keep_alive=keep_alive,
+            stream=True,
+        )
+
+        async def iterator() -> AsyncIterator[dict[str, Any]]:
+            url = f"{self.base_url}/api/generate"
+            try:
+                async with self.http_client.stream(
+                    "POST",
+                    url,
+                    json=request_payload,
+                    timeout=self.timeout,
+                ) as response:
+                    if response.status_code >= 400:
+                        detail = self._extract_error_detail(response)
+                        mapped_status = 502
+                        if response.status_code in {400, 404, 422, 503}:
+                            mapped_status = response.status_code
+                        raise OllamaUpstreamError(detail, status_code=mapped_status)
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        try:
+                            payload = json.loads(line)
+                        except json.JSONDecodeError as exc:
+                            raise OllamaUpstreamError(
+                                "Ollama returned an invalid JSON stream payload.",
+                            ) from exc
+                        if not isinstance(payload, dict):
+                            raise OllamaUpstreamError(
+                                "Ollama returned an invalid stream payload.",
+                            )
+                        yield payload
+            except httpx.TimeoutException as exc:
+                logger.error("Ollama timed out after %s seconds for %s", self.timeout, url)
+                raise OllamaTimeoutError(self.timeout) from exc
+            except httpx.RequestError as exc:
+                logger.error("Unable to reach Ollama at %s: %s", url, exc)
+                raise OllamaConnectionError(
+                    "Unable to connect to Ollama. Make sure Ollama is running locally.",
+                ) from exc
+
+        return iterator()
 
     async def _request(
         self,
@@ -126,6 +183,29 @@ class OllamaService:
             if isinstance(name, str) and name:
                 names.append(name)
         return names
+
+    @staticmethod
+    def _build_generate_payload(
+        *,
+        prompt: str,
+        model: str,
+        system_prompt: str | None,
+        temperature: float | None,
+        keep_alive: str | None,
+        stream: bool,
+    ) -> dict[str, Any]:
+        request_payload: dict[str, Any] = {
+            "model": model,
+            "prompt": prompt,
+            "stream": stream,
+        }
+        if system_prompt:
+            request_payload["system"] = system_prompt
+        if keep_alive:
+            request_payload["keep_alive"] = keep_alive
+        if temperature is not None:
+            request_payload["options"] = {"temperature": temperature}
+        return request_payload
 
     @staticmethod
     def _extract_error_detail(response: httpx.Response) -> str:

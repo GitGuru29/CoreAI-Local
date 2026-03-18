@@ -1,23 +1,35 @@
 # CoreAI-Local
 
-`CoreAI-Local` is a lightweight FastAPI gateway that exposes a clean local REST API on top of a locally running Ollama instance. It is designed for offline-first Linux setups where the AI model and server stay on the same machine, while other devices on a trusted LAN or hotspot can call the gateway without any cloud dependency.
+`CoreAI-Local` is an offline-first FastAPI gateway for a locally running Ollama instance on Linux. It exposes a clean REST API that stays on the local machine and local network, making it useful as a lightweight AI backend for other LAN clients such as a Mac app, a browser UI, or a mobile client.
 
-The gateway connects only to Ollama's local API at `http://localhost:11434` by default and exposes:
+The gateway talks to Ollama only through its local API at `http://localhost:11434` and is designed to keep working without internet once Ollama and the target models already exist on disk.
+
+## What it provides
 
 - `GET /health`
+- `GET /info`
 - `GET /models`
 - `POST /chat`
+- `POST /chat/stream`
+- `POST /summarize`
+- `POST /analyze-code`
 
-## Features
+## Current backend features
 
-- Offline-first architecture for local and LAN-only usage
-- FastAPI-based REST API with automatic OpenAPI docs
-- Modular backend layout with separated routes, schemas, services, config, and utilities
-- Graceful handling when Ollama is unavailable
-- Basic structured logging for request tracing and troubleshooting
-- `.env`-driven configuration for model selection, ports, and runtime settings
+- Offline-first Linux deployment with LAN access
+- Optional model selection per request
+- Streaming chat responses with server-sent events
+- Structured JSON errors with readable status codes
+- Installed-model validation before generation
+- Request timing logs with client IP and selected model
+- File logging to `logs/server.log`
+- Local request guard with rate limiting and queue protection
+- Summarization and code-analysis endpoints
+- `.env`-driven runtime config
+- Example `curl` scripts in `examples/curl/`
+- `systemd` unit files in `deploy/systemd/`
 
-## Project Structure
+## Project structure
 
 ```text
 CoreAI-Local/
@@ -27,35 +39,50 @@ CoreAI-Local/
 │   │   ├── error_handlers.py
 │   │   ├── router.py
 │   │   └── routes/
+│   │       ├── analyze_code.py
 │   │       ├── chat.py
 │   │       ├── health.py
-│   │       └── models.py
+│   │       ├── info.py
+│   │       ├── models.py
+│   │       └── summarize.py
 │   ├── core/
 │   │   ├── config.py
 │   │   ├── logging.py
 │   │   └── middleware.py
 │   ├── schemas/
+│   │   ├── analyze_code.py
 │   │   ├── chat.py
 │   │   ├── health.py
-│   │   └── models.py
+│   │   ├── info.py
+│   │   ├── models.py
+│   │   └── summarize.py
 │   ├── services/
-│   │   └── ollama.py
+│   │   ├── ollama.py
+│   │   ├── request_guard.py
+│   │   └── task_prompts.py
 │   ├── utils/
-│   │   └── errors.py
+│   │   ├── errors.py
+│   │   └── guards.py
 │   └── main.py
+├── deploy/systemd/
+├── examples/curl/
+├── logs/
+├── tests/
 ├── .env.example
-├── .gitignore
-├── README.md
-└── requirements.txt
+├── requirements.txt
+└── README.md
 ```
 
-## Prerequisites
+## Requirements
 
-- Linux machine running Python 3.11+
-- Ollama installed locally on the same Linux machine
-- A model already available on disk, such as `qwen2.5-coder:7b`
+- Linux host
+- Python 3.11+
+- Ollama installed locally
+- One or more models already present locally, for example:
+  - `qwen2.5-coder:7b`
+  - `llama3.2:latest`
 
-Important: this gateway works fully offline once Ollama and the target model already exist on the host. If the model has not been downloaded yet, preload it before disconnecting from the internet, or transfer the local Ollama model data from another machine.
+Important: if the models are not already local, you must preload them before going offline.
 
 ## Setup
 
@@ -67,7 +94,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create your environment file:
+Create your local environment file:
 
 ```bash
 cp .env.example .env
@@ -78,86 +105,90 @@ Default configuration:
 ```env
 APP_NAME=CoreAI Local
 APP_VERSION=0.1.0
+APP_ENV=development
+SERVER_MODE=offline-local
 API_HOST=0.0.0.0
 API_PORT=8000
 LOG_LEVEL=INFO
+LOG_DIR=logs
+LOG_FILE=server.log
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_TIMEOUT=60
 DEFAULT_MODEL=qwen2.5-coder:7b
+MAX_PROMPT_CHARS=12000
+MAX_TEXT_CHARS=24000
+MAX_CODE_CHARS=32000
+MAX_TASK_CHARS=1000
+RATE_LIMIT_REQUESTS=30
+RATE_LIMIT_WINDOW_SECONDS=60
+MAX_CONCURRENT_AI_REQUESTS=2
+QUEUE_WAIT_TIMEOUT=5
+CORS_ALLOWED_ORIGINS=
 ```
 
-## Run Ollama Locally
+## Start Ollama
 
-Start Ollama on the Linux host:
+Run Ollama locally:
 
 ```bash
 ollama serve
 ```
 
-Check locally available models:
+Check installed models:
 
 ```bash
 ollama list
 ```
 
-If you are still in an online setup phase and need the default model:
+If you are still in the online setup phase and need a model:
 
 ```bash
 ollama pull qwen2.5-coder:7b
+ollama pull llama3.2:latest
 ```
 
-Once the model is available locally, the gateway can run without internet access.
+## Start the API gateway
 
-## Start the API Server
-
-Run the FastAPI server from the repository root:
+From the repository root:
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+source .venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-The API will then be reachable from:
+Available URLs:
 
-- The Linux host: `http://127.0.0.1:8000`
-- Other devices on the same LAN or hotspot: `http://<linux-host-ip>:8000`
+- local host: `http://127.0.0.1:8000`
+- LAN / hotspot: `http://<linux-ip>:8000`
+- docs: `http://127.0.0.1:8000/docs`
 
-Example:
+Example to find the Linux IP:
 
 ```bash
-ip addr
+ip -4 addr show
 ```
 
-Look for your local network IP such as `192.168.1.20`, then call the gateway from a Mac or another device with `http://192.168.1.20:8000`.
-
-## API Endpoints
+## Endpoints
 
 ### `GET /health`
 
-Returns gateway health and whether Ollama is reachable.
-
-Example:
+Returns service health plus Ollama status, version, default model information, and the locally available model list.
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
-Typical response when Ollama is running:
+### `GET /info`
 
-```json
-{
-  "status": "ok",
-  "service": "CoreAI Local",
-  "ollama_available": true,
-  "default_model": "qwen2.5-coder:7b",
-  "ollama_base_url": "http://localhost:11434",
-  "available_models": 1,
-  "detail": null
-}
+Returns server metadata and enabled capabilities.
+
+```bash
+curl http://127.0.0.1:8000/info
 ```
 
 ### `GET /models`
 
-Lists the models currently available inside local Ollama storage.
+Returns the locally installed Ollama models.
 
 ```bash
 curl http://127.0.0.1:8000/models
@@ -165,49 +196,154 @@ curl http://127.0.0.1:8000/models
 
 ### `POST /chat`
 
-Sends a prompt to Ollama and returns a generated response.
+Send a prompt and receive the full response when generation completes.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Write a short Python function that reverses a string.",
+    "prompt": "Explain what FastAPI dependencies do.",
     "model": "qwen2.5-coder:7b"
   }'
 ```
 
-You can also omit `model` to use `DEFAULT_MODEL` from `.env`.
+### `POST /chat/stream`
 
-Example response:
+Stream the response as server-sent events:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Explain what FastAPI dependencies are in two short sentences.",
+    "model": "llama3.2:latest"
+  }'
+```
+
+Example event:
+
+```text
+data: {"model":"llama3.2:latest","chunk":"FastAPI dependencies...","done":false}
+```
+
+### `POST /summarize`
+
+Summarize longer text with an optional style.
+
+```bash
+curl -X POST http://127.0.0.1:8000/summarize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "CoreAI-Local is an offline FastAPI gateway for Ollama running on Linux.",
+    "style": "brief",
+    "model": "llama3.2:latest"
+  }'
+```
+
+### `POST /analyze-code`
+
+Analyze code for explanation, review, bug-finding, cleanup, documentation, or optimization.
+
+```bash
+curl -X POST http://127.0.0.1:8000/analyze-code \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "fun main() { println(\"Hi\") }",
+    "language": "kotlin",
+    "task": "explain",
+    "model": "llama3.2:latest"
+  }'
+```
+
+## Error handling
+
+The API returns structured errors such as:
 
 ```json
 {
-  "model": "qwen2.5-coder:7b",
-  "response": "def reverse_string(value: str) -> str:\n    return value[::-1]",
-  "done": true,
-  "done_reason": "stop",
-  "created_at": "2026-03-18T00:00:00Z",
-  "total_duration": 123456789,
-  "load_duration": 1234567,
-  "prompt_eval_count": 12,
-  "eval_count": 21,
-  "prompt_eval_duration": 3456789,
-  "eval_duration": 9876543
+  "error": "Requested model is not installed.",
+  "code": "model_not_installed",
+  "details": {
+    "model": "missing:model",
+    "available_models": [
+      "qwen2.5-coder:7b",
+      "llama3.2:latest"
+    ]
+  }
 }
 ```
 
-## OpenAPI Docs
+Common cases handled:
 
-When the server is running, interactive docs are available at:
+- Ollama unavailable
+- model not installed
+- timeout while generating
+- invalid payload JSON
+- validation errors
+- request size too large
+- local queue full
+- rate-limited client
 
-- `http://127.0.0.1:8000/docs`
-- `http://<linux-host-ip>:8000/docs`
+## Logs
 
-## Operational Notes
+Console logs are emitted while the server is running, and persistent logs are written to:
 
-- Keep Ollama bound locally. The FastAPI gateway is the component intended for LAN access.
-- Use a trusted LAN or hotspot only. If the host firewall is enabled, allow port `8000` only on the private interface you intend to use.
-- If Ollama is not running, `GET /health` will report a degraded state and `GET /models` or `POST /chat` will return a clear error response.
+```text
+logs/server.log
+```
+
+These logs include:
+
+- client IP
+- endpoint path
+- selected model
+- status code
+- request duration
+
+## Examples
+
+Example `curl` scripts are included in:
+
+```text
+examples/curl/
+```
+
+Current scripts:
+
+- `health.sh`
+- `info.sh`
+- `models.sh`
+- `chat.sh`
+- `chat-stream.sh`
+- `summarize.sh`
+- `analyze-code.sh`
+
+## systemd auto-start
+
+Sample service files are included in:
+
+```text
+deploy/systemd/
+```
+
+Install them:
+
+```bash
+sudo cp deploy/systemd/ollama-local.service /etc/systemd/system/
+sudo cp deploy/systemd/coreai-local.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ollama-local.service
+sudo systemctl enable --now coreai-local.service
+```
+
+Check status:
+
+```bash
+sudo systemctl status ollama-local.service
+sudo systemctl status coreai-local.service
+```
+
+Important: the included unit files are currently configured for this repository path and user. If you move the project, update the unit files before installing them.
 
 ## Development
 
@@ -217,12 +353,19 @@ Basic syntax validation:
 python3 -m compileall app
 ```
 
-Run the included smoke tests:
+Unit tests:
 
 ```bash
 python3 -m unittest discover -s tests
 ```
 
+## Security notes
+
+- Keep Ollama bound locally.
+- Expose the FastAPI gateway only on a trusted LAN or hotspot.
+- Leave `CORS_ALLOWED_ORIGINS` empty unless you actually need browser-based access.
+- Use private network firewall rules if other devices will connect.
+
 ## License
 
-Add your preferred license before publishing the repository.
+This repository includes a license file at the root.

@@ -39,6 +39,7 @@ async def read_server_info(
         available_model_names=model_names,
         features=[
             "chat",
+            "chat-stream",
             "models",
             "health",
             "info",

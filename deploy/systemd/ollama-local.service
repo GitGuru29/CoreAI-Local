@@ -1,0 +1,18 @@
+[Unit]
+Description=Ollama Local Model Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=msfvenom
+WorkingDirectory=/home/msfvenom
+Environment=OLLAMA_HOST=127.0.0.1:11434
+ExecStart=/usr/bin/ollama serve
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
