@@ -7,8 +7,13 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-LAN_IP="${1:-${COREAI_LOCAL_IP:-${DEFAULT_IP}}}"
+LAN_IP="${1:-}"
+DEFAULT_IP=""
+
+if [[ -z "${LAN_IP}" ]]; then
+  DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  LAN_IP="${COREAI_LOCAL_IP:-${DEFAULT_IP}}"
+fi
 NGINX_CONF="/etc/nginx/nginx.conf"
 CONF_DIR="/etc/nginx/conf.d"
 TARGET_CONF="${CONF_DIR}/coreai-local.conf"
