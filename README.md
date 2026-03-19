@@ -418,7 +418,20 @@ The provided config is set up for:
 - `127.0.0.1`
 - current LAN IP `10.113.228.6`
 
-If your LAN IP changes later, update the nginx config and regenerate the certificate.
+Install nginx and the reverse proxy with:
+
+```bash
+sudo pacman -S --needed --noconfirm nginx
+sudo bash deploy/nginx/install-nginx.sh 10.113.228.6
+```
+
+The installer patches `/etc/nginx/nginx.conf` to include `/etc/nginx/conf.d/*.conf` when needed. This matters on hosts where nginx is installed with only the default welcome site active.
+
+If your LAN IP changes later, rerun:
+
+```bash
+sudo bash deploy/nginx/install-nginx.sh <new-lan-ip>
+```
 
 Example protected request through HTTPS:
 
