@@ -445,6 +445,34 @@ curl https://10.113.228.6/models \
 
 `--insecure` is only needed until the self-signed certificate is trusted by the client machine.
 
+### Trust the self-signed certificate on macOS
+
+If you want your Mac to call the local HTTPS endpoint without `--insecure`, import the generated certificate into the macOS System keychain and mark it trusted.
+
+Copy the certificate from the Linux host to the Mac:
+
+```bash
+scp msfvenom@10.113.228.6:/etc/nginx/certs/coreai-local.crt ~/Downloads/coreai-local.crt
+```
+
+Import it on the Mac:
+
+```bash
+sudo security add-trusted-cert \
+  -d \
+  -r trustRoot \
+  -k /Library/Keychains/System.keychain \
+  ~/Downloads/coreai-local.crt
+```
+
+Then test without `--insecure`:
+
+```bash
+curl https://10.113.228.6/health
+```
+
+If you regenerate the certificate later because the host IP changed, re-import the new `.crt` file on the Mac.
+
 ## Development
 
 Basic syntax validation:

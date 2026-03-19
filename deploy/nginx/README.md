@@ -34,3 +34,23 @@ If the host IP changes later, rerun:
 ```bash
 sudo bash deploy/nginx/install-nginx.sh <new-lan-ip>
 ```
+
+## Trust the certificate on macOS
+
+Copy the generated certificate from the Linux host:
+
+```bash
+scp msfvenom@10.113.228.6:/etc/nginx/certs/coreai-local.crt ~/Downloads/coreai-local.crt
+```
+
+Import it into the macOS System keychain:
+
+```bash
+sudo security add-trusted-cert \
+  -d \
+  -r trustRoot \
+  -k /Library/Keychains/System.keychain \
+  ~/Downloads/coreai-local.crt
+```
+
+After that, HTTPS requests from the Mac can be made without `--insecure`.
