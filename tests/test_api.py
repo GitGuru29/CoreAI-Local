@@ -58,6 +58,10 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
         raw_body = self.rfile.read(content_length or 0)
         payload = json.loads(raw_body.decode("utf-8") or "{}")
 
+        if self.path == "/api/chat":
+            self._handle_chat(payload)
+            return
+
         if self.path != "/api/generate":
             self._send_json({"error": "not found"}, status=404)
             return
@@ -93,6 +97,57 @@ class FakeOllamaHandler(BaseHTTPRequestHandler):
             {
                 "model": model,
                 "response": response_text,
+                "done": True,
+                "done_reason": "stop",
+                "created_at": "2026-03-18T00:00:00Z",
+            },
+        )
+
+    def _handle_chat(self, payload: dict) -> None:
+        model = payload.get("model")
+        if model not in {item["name"] for item in AVAILABLE_MODELS}:
+            self._send_json({"error": "model not found"}, status=404)
+            return
+
+        messages = payload.get("messages", [])
+        combined_text = " ".join(
+            item.get("content", "")
+            for item in messages
+            if isinstance(item, dict)
+        ).lower()
+        last_user_message = ""
+        for item in reversed(messages):
+            if isinstance(item, dict) and item.get("role") == "user":
+                last_user_message = str(item.get("content", "")).strip().lower()
+                break
+
+        if payload.get("stream"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson")
+            self.end_headers()
+            chunks = [
+                {"model": model, "message": {"role": "assistant", "content": "Hello"}, "done": False},
+                {"model": model, "message": {"role": "assistant", "content": "!"}, "done": False},
+                {
+                    "model": model,
+                    "message": {"role": "assistant", "content": ""},
+                    "done": True,
+                    "done_reason": "stop",
+                },
+            ]
+            for chunk in chunks:
+                self.wfile.write(json.dumps(chunk).encode("utf-8") + b"\n")
+                self.wfile.flush()
+            return
+
+        response_text = "offline reply"
+        if last_user_message == "go ahead" and "java" in combined_text:
+            response_text = "```java\npublic class DemoApp {}\n```"
+
+        self._send_json(
+            {
+                "model": model,
+                "message": {"role": "assistant", "content": response_text},
                 "done": True,
                 "done_reason": "stop",
                 "created_at": "2026-03-18T00:00:00Z",
@@ -244,6 +299,28 @@ class ApiRoutesTestCase(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["model"], "qwen2.5-coder:7b")
         self.assertEqual(payload["response"], "offline reply")
+
+    def test_chat_supports_message_history_for_follow_up_requests(self) -> None:
+        status, payload = self.request(
+            "POST",
+            "/chat",
+            {
+                "prompt": "go ahead",
+                "response_mode": "code",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Can you give me a sample Java web app?",
+                    },
+                    {
+                        "role": "assistant",
+                        "content": "I can give you a Java sample. Say go ahead if you want the code.",
+                    },
+                ],
+            },
+        )
+        self.assertEqual(status, 200)
+        self.assertIn("```java", payload["response"])
 
     def test_models_rejects_missing_api_key(self) -> None:
         status, payload = self.request("GET", "/models", include_auth=False)

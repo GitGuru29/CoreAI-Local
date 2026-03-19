@@ -18,6 +18,35 @@ def build_summary_prompt(text: str, style: str, max_bullets: int | None) -> str:
     )
 
 
+def build_chat_system_prompt(
+    *,
+    system_prompt: str | None,
+    response_mode: str,
+) -> str | None:
+    mode_instructions = {
+        "guide": (
+            "Prefer concise guidance, structured steps, and practical explanation. "
+            "Only include code when it materially helps or the user explicitly asks for it."
+        ),
+        "code": (
+            "When the user asks for code, a sample snippet, an implementation, a scaffold, or "
+            "asks you to continue with code, provide the code first. Return a concrete runnable "
+            "example in fenced code blocks. Do not replace requested code with only high-level "
+            "instructions. If assumptions are needed, keep them brief and place them after the code."
+        ),
+    }
+
+    parts: list[str] = []
+    if system_prompt:
+        parts.append(system_prompt.strip())
+    mode_instruction = mode_instructions.get(response_mode)
+    if mode_instruction:
+        parts.append(mode_instruction)
+    if not parts:
+        return None
+    return "\n\n".join(parts)
+
+
 def build_code_analysis_prompt(
     *,
     code: str,
