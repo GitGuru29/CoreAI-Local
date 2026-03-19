@@ -29,6 +29,7 @@ The gateway talks to Ollama only through its local API at `http://localhost:1143
 - Local request guard with rate limiting and queue protection
 - Summarization and code-analysis endpoints
 - Reverse-proxy support with HTTPS-ready deployment files
+- Preferred Caddy local-CA deployment for persistent local HTTPS
 - Stable Bonjour/mDNS hostname support for Mac clients
 - `.env`-driven runtime config
 - Example `curl` scripts in `examples/curl/`
@@ -69,7 +70,11 @@ CoreAI-Local/
 │   │   ├── errors.py
 │   │   └── guards.py
 │   └── main.py
-├── deploy/systemd/
+├── deploy/
+│   ├── caddy/
+│   ├── mdns/
+│   ├── nginx/
+│   └── systemd/
 ├── examples/curl/
 ├── logs/
 ├── tests/
@@ -458,7 +463,60 @@ The included `coreai-local.service` binds Uvicorn to `127.0.0.1:8000` so it can 
 
 The included `ollama-local.service` also sets `OLLAMA_MODELS=/var/lib/ollama` so the service can reuse models already pulled into the local system store. If your machine stores models somewhere else, update that path before installing or restarting the unit.
 
-## HTTPS reverse proxy
+## Preferred local HTTPS: Caddy
+
+The preferred local reverse proxy is Caddy with `tls internal`. This avoids repeated per-device trust churn because the Mac only needs to trust the Caddy root CA once.
+
+Deployment files:
+
+```text
+deploy/caddy/
+deploy/mdns/
+```
+
+Recommended install:
+
+```bash
+sudo pacman -S --needed --noconfirm caddy avahi nss-mdns
+sudo bash deploy/caddy/install-caddy.sh coreai-local.local
+sudo bash deploy/mdns/install-mdns.sh
+```
+
+Preferred stable client URL:
+
+```text
+https://coreai-local.local
+```
+
+Trust the Caddy root CA once on the Mac:
+
+```bash
+scp msfvenom@coreai-local.local:/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt \
+  ~/Downloads/coreai-local-root.crt
+
+sudo security add-trusted-cert \
+  -d \
+  -r trustRoot \
+  -k /Library/Keychains/System.keychain \
+  ~/Downloads/coreai-local-root.crt
+```
+
+After that, normal device reboots and Wi-Fi reconnects should not require re-copying leaf certificates as long as:
+
+- `caddy.service` is enabled
+- `avahi-daemon.service` is enabled
+- `coreai-local.service` is enabled
+- `ollama-local.service` is enabled
+- both devices rejoin the same LAN
+
+Useful runtime checks:
+
+```bash
+sudo systemctl status caddy.service avahi-daemon.service coreai-local.service ollama-local.service --no-pager
+journalctl -u caddy.service -f
+```
+
+## Legacy HTTPS reverse proxy: nginx
 
 This repository includes an `nginx` deployment config in:
 

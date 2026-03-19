@@ -6,6 +6,7 @@ These service files are configured for this machine and repository path:
 - user: `msfvenom`
 - model store: `/var/lib/ollama`
 - mDNS hostname: `coreai-local.local`
+- preferred reverse proxy: `caddy.service`
 
 If you move the repository later, update the paths inside both unit files before installing them.
 If your local Ollama models are stored somewhere else, update `OLLAMA_MODELS` in `ollama-local.service` before installing it.
@@ -19,6 +20,14 @@ sudo cp deploy/systemd/coreai-local-mdns.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now ollama-local.service
 sudo systemctl enable --now coreai-local.service
+```
+
+The preferred HTTPS entrypoint is the package-provided `caddy.service`, not a custom unit in this repo:
+
+```bash
+sudo pacman -S --needed --noconfirm caddy
+sudo bash deploy/caddy/install-caddy.sh coreai-local.local
+sudo systemctl status caddy.service --no-pager
 ```
 
 ## Check status
@@ -57,4 +66,5 @@ sudo systemctl restart coreai-local.service
 journalctl -u ollama-local.service -f
 journalctl -u coreai-local.service -f
 journalctl -u coreai-local-mdns.service -f
+journalctl -u caddy.service -f
 ```
