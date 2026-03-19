@@ -1,3 +1,4 @@
+from fastapi.encoders import jsonable_encoder
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -40,6 +41,6 @@ async def validation_exception_handler(
         content={
             "error": "Invalid request payload.",
             "code": "validation_error",
-            "details": exc.errors(),
+            "details": jsonable_encoder(exc.errors()),
         },
     )
