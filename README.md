@@ -29,6 +29,7 @@ The gateway talks to Ollama only through its local API at `http://localhost:1143
 - Local request guard with rate limiting and queue protection
 - Summarization and code-analysis endpoints
 - Reverse-proxy support with HTTPS-ready deployment files
+- Stable Bonjour/mDNS hostname support for Mac clients
 - `.env`-driven runtime config
 - Example `curl` scripts in `examples/curl/`
 - `systemd` unit files in `deploy/systemd/`
@@ -481,21 +482,34 @@ Install nginx and the reverse proxy with:
 
 ```bash
 sudo pacman -S --needed --noconfirm nginx
-sudo bash deploy/nginx/install-nginx.sh 10.113.228.6
+sudo bash deploy/nginx/install-nginx.sh 10.113.228.6 coreai-local.local
 ```
 
 The installer patches `/etc/nginx/nginx.conf` to include `/etc/nginx/conf.d/*.conf` when needed. This matters on hosts where nginx is installed with only the default welcome site active.
 
-If your LAN IP changes later, rerun:
+To avoid Mac-to-Linux breakage after Wi-Fi reconnects and IP changes, enable a stable Bonjour/mDNS hostname:
 
 ```bash
-sudo bash deploy/nginx/install-nginx.sh <new-lan-ip>
+sudo pacman -S --needed --noconfirm avahi nss-mdns
+sudo bash deploy/mdns/install-mdns.sh
+```
+
+After that, the preferred Mac endpoint becomes:
+
+```text
+https://coreai-local.local
+```
+
+If your LAN IP changes later, rerun the nginx installer only when you want to refresh the fallback IP entry in the certificate:
+
+```bash
+sudo bash deploy/nginx/install-nginx.sh <new-lan-ip> coreai-local.local
 ```
 
 Example protected request through HTTPS:
 
 ```bash
-curl https://10.113.228.6/models \
+curl https://coreai-local.local/models \
   --insecure \
   -H "X-API-Key: replace-with-your-secret"
 ```
@@ -509,7 +523,7 @@ If you want your Mac to call the local HTTPS endpoint without `--insecure`, impo
 Copy the certificate from the Linux host to the Mac:
 
 ```bash
-scp msfvenom@10.113.228.6:/etc/nginx/certs/coreai-local.crt ~/Downloads/coreai-local.crt
+scp msfvenom@coreai-local.local:/etc/nginx/certs/coreai-local.crt ~/Downloads/coreai-local.crt
 ```
 
 Import it on the Mac:
@@ -526,6 +540,12 @@ Then test without `--insecure`:
 
 ```bash
 curl https://10.113.228.6/health
+```
+
+For a stable Mac setup, prefer:
+
+```bash
+curl https://coreai-local.local/health
 ```
 
 If you regenerate the certificate later because the host IP changed, re-import the new `.crt` file on the Mac.

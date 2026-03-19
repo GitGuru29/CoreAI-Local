@@ -1,0 +1,18 @@
+[Unit]
+Description=Publish CoreAI Local mDNS Hostname
+After=network-online.target avahi-daemon.service
+Wants=network-online.target avahi-daemon.service
+Requires=avahi-daemon.service
+
+[Service]
+Type=simple
+User=msfvenom
+WorkingDirectory=/run/media/msfvenom/28aa095f-4b10-4a14-8ba9-4f2570fb6ce2/CoreAI-Local
+ExecStart=/bin/bash /run/media/msfvenom/28aa095f-4b10-4a14-8ba9-4f2570fb6ce2/CoreAI-Local/deploy/mdns/publish-mdns-host.sh coreai-local.local
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
