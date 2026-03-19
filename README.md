@@ -398,6 +398,8 @@ Important: the included unit files are currently configured for this repository 
 
 The included `coreai-local.service` binds Uvicorn to `127.0.0.1:8000` so it can sit safely behind a reverse proxy.
 
+The included `ollama-local.service` also sets `OLLAMA_MODELS=/var/lib/ollama` so the service can reuse models already pulled into the local system store. If your machine stores models somewhere else, update that path before installing or restarting the unit.
+
 ## HTTPS reverse proxy
 
 This repository includes an `nginx` deployment config in:
