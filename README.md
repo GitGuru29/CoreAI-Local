@@ -492,6 +492,7 @@ To avoid Mac-to-Linux breakage after Wi-Fi reconnects and IP changes, enable a s
 ```bash
 sudo pacman -S --needed --noconfirm avahi nss-mdns
 sudo bash deploy/mdns/install-mdns.sh
+grep '^hosts:' /etc/nsswitch.conf
 ```
 
 After that, the preferred Mac endpoint becomes:

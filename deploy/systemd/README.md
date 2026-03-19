@@ -33,6 +33,7 @@ If you also want a stable Bonjour/mDNS hostname for Mac clients, install `avahi`
 ```bash
 sudo pacman -S --needed --noconfirm avahi nss-mdns
 sudo bash deploy/mdns/install-mdns.sh
+grep '^hosts:' /etc/nsswitch.conf
 sudo systemctl status avahi-daemon.service coreai-local-mdns.service --no-pager
 ```
 

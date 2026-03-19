@@ -29,6 +29,7 @@ sudo bash deploy/mdns/install-mdns.sh
 
 - enables `avahi-daemon.service`
 - enables `coreai-local-mdns.service`
+- patches `/etc/nsswitch.conf` to add `mdns_minimal [NOTFOUND=return]` to the `hosts:` resolver line when it is missing
 - continuously republishes `coreai-local.local` to the Linux host's current IPv4 address
 - survives Wi-Fi disconnect and reconnect events by updating the published IP automatically
 
@@ -36,6 +37,7 @@ sudo bash deploy/mdns/install-mdns.sh
 
 ```bash
 systemctl status avahi-daemon.service coreai-local-mdns.service --no-pager
+grep '^hosts:' /etc/nsswitch.conf
 avahi-resolve-host-name coreai-local.local
 ```
 
