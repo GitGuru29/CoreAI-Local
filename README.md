@@ -491,7 +491,7 @@ https://coreai-local.local
 Trust the Caddy root CA once on the Mac:
 
 ```bash
-scp msfvenom@coreai-local.local:/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt \
+scp msfvenom@coreai-local.local:/etc/caddy/coreai-local-root.crt \
   ~/Downloads/coreai-local-root.crt
 
 sudo security add-trusted-cert \

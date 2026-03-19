@@ -44,7 +44,7 @@ With `caddy.service`, `avahi-daemon.service`, `coreai-local.service`, and `ollam
 Trust the Caddy local root CA once on the Mac:
 
 ```bash
-scp msfvenom@coreai-local.local:/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt \
+scp msfvenom@coreai-local.local:/etc/caddy/coreai-local-root.crt \
   ~/Downloads/coreai-local-root.crt
 
 sudo security add-trusted-cert \
@@ -61,6 +61,14 @@ curl https://coreai-local.local/health
 ```
 
 without `--insecure`.
+
+The installer exports a readable copy of the root CA to:
+
+```text
+/etc/caddy/coreai-local-root.crt
+```
+
+so it can be copied over SSH by a normal user account.
 
 ## Verify on Linux
 

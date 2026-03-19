@@ -10,6 +10,8 @@ HOSTNAME_ALIAS="${1:-${COREAI_LOCAL_HOSTNAME:-coreai-local.local}}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_FILE="${SCRIPT_DIR}/Caddyfile"
 TARGET_FILE="/etc/caddy/Caddyfile"
+ROOT_CA_SOURCE="/var/lib/caddy/pki/authorities/local/root.crt"
+ROOT_CA_EXPORT="/etc/caddy/coreai-local-root.crt"
 
 if ! command -v caddy >/dev/null 2>&1; then
   echo "caddy is not installed. Install it first: sudo pacman -S --needed --noconfirm caddy" >&2
@@ -43,5 +45,13 @@ systemctl restart caddy.service
 # Install the local Caddy root CA into the Linux trust store.
 caddy trust --config "${TARGET_FILE}" || true
 
+for _ in $(seq 1 20); do
+  if [[ -f "${ROOT_CA_SOURCE}" ]]; then
+    install -Dm644 "${ROOT_CA_SOURCE}" "${ROOT_CA_EXPORT}"
+    break
+  fi
+  sleep 1
+done
+
 echo "Caddy is serving CoreAI-Local on https://${HOSTNAME_ALIAS}"
-echo "Caddy local root CA: /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
+echo "Caddy local root CA exported to: ${ROOT_CA_EXPORT}"
