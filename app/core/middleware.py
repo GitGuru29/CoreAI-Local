@@ -1,9 +1,11 @@
 from time import perf_counter
 
 from starlette.datastructures import Headers
+from starlette.responses import JSONResponse
 
 from app.core.logging import get_logger
 from app.services.auth import AuthService
+from app.utils.errors import AppError
 
 logger = get_logger(__name__)
 
@@ -77,5 +79,18 @@ class ApiKeyAuthMiddleware:
 
         path = scope.get("path", "")
         headers = Headers(scope=scope)
-        self.auth_service.authenticate(path=path, headers=headers)
+        try:
+            self.auth_service.authenticate(path=path, headers=headers)
+        except AppError as exc:
+            response = JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "error": exc.error,
+                    "code": exc.code,
+                    "details": exc.details,
+                },
+                headers=exc.headers,
+            )
+            await response(scope, receive, send)
+            return
         await self.app(scope, receive, send)
