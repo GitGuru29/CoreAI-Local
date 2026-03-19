@@ -26,6 +26,7 @@ The gateway talks to Ollama only through its local API at `http://localhost:1143
 - File logging to `logs/server.log`
 - Local request guard with rate limiting and queue protection
 - Summarization and code-analysis endpoints
+- Reverse-proxy support with HTTPS-ready deployment files
 - `.env`-driven runtime config
 - Example `curl` scripts in `examples/curl/`
 - `systemd` unit files in `deploy/systemd/`
@@ -394,6 +395,40 @@ sudo systemctl status coreai-local.service
 ```
 
 Important: the included unit files are currently configured for this repository path and user. If you move the project, update the unit files before installing them.
+
+The included `coreai-local.service` binds Uvicorn to `127.0.0.1:8000` so it can sit safely behind a reverse proxy.
+
+## HTTPS reverse proxy
+
+This repository includes an `nginx` deployment config in:
+
+```text
+deploy/nginx/
+```
+
+Recommended host layout:
+
+- `CoreAI-Local` on `127.0.0.1:8000`
+- `nginx` on `443` with TLS
+- optional `80 -> 443` redirect
+
+The provided config is set up for:
+
+- `localhost`
+- `127.0.0.1`
+- current LAN IP `10.113.228.6`
+
+If your LAN IP changes later, update the nginx config and regenerate the certificate.
+
+Example protected request through HTTPS:
+
+```bash
+curl https://10.113.228.6/models \
+  --insecure \
+  -H "X-API-Key: replace-with-your-secret"
+```
+
+`--insecure` is only needed until the self-signed certificate is trusted by the client machine.
 
 ## Development
 
