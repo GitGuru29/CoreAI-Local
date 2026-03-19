@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     log_dir: str = Field(default="logs")
     log_file: str = Field(default="server.log")
     ollama_base_url: str = Field(default="http://localhost:11434")
-    ollama_timeout: float = Field(default=60.0, gt=0)
+    ollama_timeout: float = Field(default=1800.0, gt=0)
     default_model: str = Field(default="qwen2.5-coder:7b")
     max_prompt_chars: int = Field(default=12000, ge=1)
     max_text_chars: int = Field(default=24000, ge=1)

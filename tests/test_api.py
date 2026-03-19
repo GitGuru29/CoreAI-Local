@@ -328,3 +328,52 @@ class ApiRoutesTestCase(unittest.TestCase):
 
         self.assertIn('data: {"model": "llama3.2:latest", "chunk": "Hello"', body)
         self.assertIn('"done": true', body)
+
+    def test_summarize_stream_endpoint(self) -> None:
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": TEST_API_KEY,
+        }
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.api_port}/summarize/stream",
+            data=json.dumps(
+                {
+                    "text": "CoreAI-Local is an offline FastAPI gateway for Ollama.",
+                    "style": "brief",
+                    "model": "llama3.2:latest",
+                },
+            ).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8")
+
+        self.assertIn('"style": "brief"', body)
+        self.assertIn('"source_length": 54', body)
+        self.assertIn('"done": true', body)
+
+    def test_analyze_code_stream_endpoint(self) -> None:
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": TEST_API_KEY,
+        }
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.api_port}/analyze-code/stream",
+            data=json.dumps(
+                {
+                    "code": "fun main() { println(\"Hi\") }",
+                    "language": "kotlin",
+                    "task": "review",
+                    "model": "llama3.2:latest",
+                },
+            ).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8")
+
+        self.assertIn('"language": "kotlin"', body)
+        self.assertIn('"task": "review"', body)
+        self.assertIn('"done": true', body)

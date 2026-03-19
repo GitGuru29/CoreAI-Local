@@ -12,13 +12,15 @@ The gateway talks to Ollama only through its local API at `http://localhost:1143
 - `POST /chat`
 - `POST /chat/stream`
 - `POST /summarize`
+- `POST /summarize/stream`
 - `POST /analyze-code`
+- `POST /analyze-code/stream`
 
 ## Current backend features
 
 - Offline-first Linux deployment with LAN access
 - Optional model selection per request
-- Streaming chat responses with server-sent events
+- Streaming chat, summarize, and code-analysis responses with server-sent events
 - Optional API-key auth for LAN clients
 - Structured JSON errors with readable status codes
 - Installed-model validation before generation
@@ -118,7 +120,7 @@ LOG_LEVEL=INFO
 LOG_DIR=logs
 LOG_FILE=server.log
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_TIMEOUT=60
+OLLAMA_TIMEOUT=1800
 DEFAULT_MODEL=qwen2.5-coder:7b
 MAX_PROMPT_CHARS=12000
 MAX_TEXT_CHARS=24000
@@ -275,6 +277,20 @@ curl -X POST http://127.0.0.1:8000/summarize \
   }'
 ```
 
+### `POST /summarize/stream`
+
+Stream summarization output as server-sent events. This is recommended for longer documents on slower CPU-only hosts.
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/summarize/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "CoreAI-Local is an offline FastAPI gateway for Ollama running on Linux.",
+    "style": "brief",
+    "model": "llama3.2:latest"
+  }'
+```
+
 ### `POST /analyze-code`
 
 Analyze code for explanation, review, bug-finding, cleanup, documentation, or optimization.
@@ -286,6 +302,21 @@ curl -X POST http://127.0.0.1:8000/analyze-code \
     "code": "fun main() { println(\"Hi\") }",
     "language": "kotlin",
     "task": "explain",
+    "model": "llama3.2:latest"
+  }'
+```
+
+### `POST /analyze-code/stream`
+
+Stream code-analysis output as server-sent events. This is recommended for heavy code-review and bug-finding tasks that can take several minutes on local hardware.
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/analyze-code/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "fun main() { println(\"Hi\") }",
+    "language": "kotlin",
+    "task": "review",
     "model": "llama3.2:latest"
   }'
 ```
@@ -335,6 +366,8 @@ Common cases handled:
 - local queue full
 - rate-limited client
 
+For longer code-generation, summarization, or code-analysis jobs on smaller Linux machines, prefer the streaming endpoints and keep `OLLAMA_TIMEOUT` high enough for CPU-bound runs.
+
 ## Logs
 
 Console logs are emitted while the server is running, and persistent logs are written to:
@@ -367,7 +400,9 @@ Current scripts:
 - `chat.sh`
 - `chat-stream.sh`
 - `summarize.sh`
+- `summarize-stream.sh`
 - `analyze-code.sh`
+- `analyze-code-stream.sh`
 
 ## systemd auto-start
 

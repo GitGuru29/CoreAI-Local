@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import (
     get_ollama_service,
@@ -79,4 +82,75 @@ async def analyze_code(
         eval_count=result.get("eval_count"),
         prompt_eval_duration=result.get("prompt_eval_duration"),
         eval_duration=result.get("eval_duration"),
+    )
+
+
+@router.post(
+    "/analyze-code/stream",
+    summary="Stream code analysis as server-sent events",
+)
+async def stream_code_analysis(
+    payload: AnalyzeCodeRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings_from_app),
+    ollama_service: OllamaService = Depends(get_ollama_service),
+    request_guard: RequestGuardService = Depends(get_request_guard),
+) -> StreamingResponse:
+    model_name = payload.model or settings.default_model
+    client_ip = request.client.host if request.client else "unknown"
+    request.state.selected_model = model_name
+
+    enforce_max_length("code", payload.code, settings.max_code_chars)
+    if payload.instructions:
+        enforce_max_length("instructions", payload.instructions, settings.max_task_chars)
+    await request_guard.enforce_rate_limit(client_ip)
+
+    prompt = build_code_analysis_prompt(
+        code=payload.code,
+        language=payload.language,
+        task=payload.task,
+        instructions=payload.instructions,
+    )
+
+    await ollama_service.ensure_model_available(model_name)
+
+    logger.info(
+        "analyze-code stream opened client_ip=%s model=%s language=%s code_chars=%s task=%s",
+        client_ip,
+        model_name,
+        payload.language,
+        len(payload.code),
+        payload.task,
+    )
+
+    async def event_stream():
+        async with request_guard.acquire_generation_slot():
+            async for chunk in ollama_service.stream_generate(
+                prompt=prompt,
+                model=model_name,
+                system_prompt=payload.system_prompt
+                or "You are a senior software engineer analyzing code offline.",
+                temperature=payload.temperature,
+                keep_alive=payload.keep_alive,
+            ):
+                event = {
+                    "model": chunk.get("model", model_name),
+                    "language": payload.language,
+                    "task": payload.task,
+                    "source_length": len(payload.code),
+                    "chunk": chunk.get("response", ""),
+                    "done": chunk.get("done", False),
+                    "done_reason": chunk.get("done_reason"),
+                    "created_at": chunk.get("created_at"),
+                    "total_duration": chunk.get("total_duration"),
+                    "load_duration": chunk.get("load_duration"),
+                    "prompt_eval_count": chunk.get("prompt_eval_count"),
+                    "eval_count": chunk.get("eval_count"),
+                }
+                yield f"data: {json.dumps(event, ensure_ascii=True)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
     )
