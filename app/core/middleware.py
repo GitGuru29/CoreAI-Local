@@ -1,6 +1,9 @@
 from time import perf_counter
 
+from starlette.datastructures import Headers
+
 from app.core.logging import get_logger
+from app.services.auth import AuthService
 
 logger = get_logger(__name__)
 
@@ -60,3 +63,19 @@ class AccessLogMiddleware:
         if isinstance(state, dict):
             return state.get("selected_model", "-")
         return getattr(state, "selected_model", "-")
+
+
+class ApiKeyAuthMiddleware:
+    def __init__(self, app, *, auth_service: AuthService) -> None:
+        self.app = app
+        self.auth_service = auth_service
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        headers = Headers(scope=scope)
+        self.auth_service.authenticate(path=path, headers=headers)
+        await self.app(scope, receive, send)

@@ -19,6 +19,7 @@ The gateway talks to Ollama only through its local API at `http://localhost:1143
 - Offline-first Linux deployment with LAN access
 - Optional model selection per request
 - Streaming chat responses with server-sent events
+- Optional API-key auth for LAN clients
 - Structured JSON errors with readable status codes
 - Installed-model validation before generation
 - Request timing logs with client IP and selected model
@@ -109,6 +110,9 @@ APP_ENV=development
 SERVER_MODE=offline-local
 API_HOST=0.0.0.0
 API_PORT=8000
+AUTH_ENABLED=false
+AUTH_API_KEY=
+AUTH_EXEMPT_PATHS=/health,/info,/docs,/openapi.json,/redoc
 LOG_LEVEL=INFO
 LOG_DIR=logs
 LOG_FILE=server.log
@@ -147,6 +151,36 @@ ollama pull qwen2.5-coder:7b
 ollama pull llama3.2:latest
 ```
 
+## Optional auth layer
+
+`CoreAI-Local` supports a small API-key auth layer intended for trusted LAN use.
+
+Enable it in `.env`:
+
+```env
+AUTH_ENABLED=true
+AUTH_API_KEY=replace-with-a-long-local-secret
+AUTH_EXEMPT_PATHS=/health,/info,/docs,/openapi.json,/redoc
+```
+
+Accepted request headers:
+
+- `X-API-Key: <your-secret>`
+- `Authorization: Bearer <your-secret>`
+
+By default:
+
+- `GET /health` stays public
+- `GET /info` stays public
+- model and generation endpoints require the key when auth is enabled
+
+Example:
+
+```bash
+curl http://127.0.0.1:8000/models \
+  -H "X-API-Key: replace-with-a-long-local-secret"
+```
+
 ## Start the API gateway
 
 From the repository root:
@@ -180,7 +214,7 @@ curl http://127.0.0.1:8000/health
 
 ### `GET /info`
 
-Returns server metadata and enabled capabilities.
+Returns server metadata, enabled capabilities, and auth state.
 
 ```bash
 curl http://127.0.0.1:8000/info
@@ -273,11 +307,27 @@ The API returns structured errors such as:
 }
 ```
 
+Authentication failures return:
+
+```json
+{
+  "error": "Valid API key required.",
+  "code": "authentication_failed",
+  "details": {
+    "accepted_headers": [
+      "X-API-Key",
+      "Authorization: Bearer <token>"
+    ]
+  }
+}
+```
+
 Common cases handled:
 
 - Ollama unavailable
 - model not installed
 - timeout while generating
+- authentication missing or invalid
 - invalid payload JSON
 - validation errors
 - request size too large

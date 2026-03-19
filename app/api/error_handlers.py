@@ -15,16 +15,18 @@ async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
         content = {"error": exc.error, "code": exc.code}
         if exc.details:
             content["details"] = exc.details
+        headers = exc.headers
     else:
         status_code = 500
         content = {"error": "Internal server error.", "code": "internal_server_error"}
+        headers = None
         logger.exception(
             "Unhandled error on %s %s",
             request.method,
             request.url.path,
         )
 
-    return JSONResponse(status_code=status_code, content=content)
+    return JSONResponse(status_code=status_code, content=content, headers=headers)
 
 
 async def validation_exception_handler(

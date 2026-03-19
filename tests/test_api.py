@@ -12,6 +12,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYTHON_BIN = REPO_ROOT / ".venv" / "bin" / "python"
+TEST_API_KEY = "test-local-api-key"
 
 AVAILABLE_MODELS = [
     {
@@ -125,6 +126,8 @@ class ApiRoutesTestCase(unittest.TestCase):
                 "APP_ENV": "test",
                 "API_HOST": "127.0.0.1",
                 "API_PORT": str(cls.api_port),
+                "AUTH_ENABLED": "true",
+                "AUTH_API_KEY": TEST_API_KEY,
                 "LOG_LEVEL": "WARNING",
                 "OLLAMA_BASE_URL": f"http://127.0.0.1:{cls.ollama_port}",
                 "OLLAMA_TIMEOUT": "10",
@@ -183,12 +186,22 @@ class ApiRoutesTestCase(unittest.TestCase):
         method: str,
         path: str,
         payload: dict | None = None,
+        *,
+        include_auth: bool = True,
+        auth_value: str | None = None,
+        use_bearer: bool = False,
     ) -> tuple[int, dict | str]:
         body = None
         headers = {}
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
             headers["Content-Type"] = "application/json"
+        if include_auth:
+            token = auth_value or TEST_API_KEY
+            if use_bearer:
+                headers["Authorization"] = f"Bearer {token}"
+            else:
+                headers["X-API-Key"] = token
         request = urllib.request.Request(
             f"http://127.0.0.1:{cls.api_port}{path}",
             data=body,
@@ -205,7 +218,7 @@ class ApiRoutesTestCase(unittest.TestCase):
             return exc.code, json.loads(raw)
 
     def test_health_reports_reachable_ollama(self) -> None:
-        status, payload = self.request("GET", "/health")
+        status, payload = self.request("GET", "/health", include_auth=False)
         self.assertEqual(status, 200)
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["ollama_status"], "reachable")
@@ -218,17 +231,36 @@ class ApiRoutesTestCase(unittest.TestCase):
         self.assertEqual(payload["models"][0]["name"], "qwen2.5-coder:7b")
 
     def test_info_returns_server_capabilities(self) -> None:
-        status, payload = self.request("GET", "/info")
+        status, payload = self.request("GET", "/info", include_auth=False)
         self.assertEqual(status, 200)
         self.assertEqual(payload["service"], "CoreAI Local")
         self.assertIn("chat-stream", payload["features"])
         self.assertIn("summarize", payload["features"])
+        self.assertTrue(payload["auth_enabled"])
+        self.assertIn("/health", payload["auth_exempt_paths"])
 
     def test_chat_uses_default_model_when_request_does_not_override_it(self) -> None:
         status, payload = self.request("POST", "/chat", {"prompt": "Hello from LAN"})
         self.assertEqual(status, 200)
         self.assertEqual(payload["model"], "qwen2.5-coder:7b")
         self.assertEqual(payload["response"], "offline reply")
+
+    def test_models_rejects_missing_api_key(self) -> None:
+        status, payload = self.request("GET", "/models", include_auth=False)
+        self.assertEqual(status, 401)
+        self.assertEqual(payload["error"], "Valid API key required.")
+        self.assertEqual(payload["code"], "authentication_failed")
+
+    def test_models_accepts_bearer_token(self) -> None:
+        status, payload = self.request("GET", "/models", use_bearer=True)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["count"], 2)
+
+    def test_models_rejects_invalid_api_key(self) -> None:
+        status, payload = self.request("GET", "/models", auth_value="wrong-token")
+        self.assertEqual(status, 401)
+        self.assertEqual(payload["error"], "Valid API key required.")
+        self.assertEqual(payload["code"], "authentication_failed")
 
     def test_chat_rejects_unknown_model_with_structured_error(self) -> None:
         status, payload = self.request(
@@ -276,6 +308,10 @@ class ApiRoutesTestCase(unittest.TestCase):
         self.assertEqual(payload["language"], "kotlin")
 
     def test_chat_stream_endpoint(self) -> None:
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": TEST_API_KEY,
+        }
         request = urllib.request.Request(
             f"http://127.0.0.1:{self.api_port}/chat/stream",
             data=json.dumps(
@@ -284,7 +320,7 @@ class ApiRoutesTestCase(unittest.TestCase):
                     "model": "llama3.2:latest",
                 },
             ).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(request, timeout=15) as response:

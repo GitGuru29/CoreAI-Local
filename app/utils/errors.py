@@ -9,12 +9,14 @@ class AppError(Exception):
         status_code: int = 500,
         code: str = "app_error",
         details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         super().__init__(error)
         self.error = error
         self.status_code = status_code
         self.code = code
         self.details = details or {}
+        self.headers = headers or {}
 
     @property
     def detail(self) -> str:
@@ -86,6 +88,22 @@ class QueueFullError(AppError):
                 "max_concurrent_requests": max_concurrent_requests,
                 "wait_timeout_seconds": wait_timeout,
             },
+        )
+
+
+class AuthenticationError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "Valid API key required.",
+            status_code=401,
+            code="authentication_failed",
+            details={
+                "accepted_headers": [
+                    "X-API-Key",
+                    "Authorization: Bearer <token>",
+                ],
+            },
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 

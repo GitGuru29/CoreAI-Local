@@ -9,6 +9,9 @@ class ServerInfoResponse(BaseModel):
     offline_mode: bool
     api_host: str
     api_port: int
+    auth_enabled: bool
+    auth_exempt_paths: list[str] = Field(default_factory=list)
+    auth_headers: list[str] = Field(default_factory=list)
     ollama_base_url: str
     ollama_timeout: float
     ollama_status: str

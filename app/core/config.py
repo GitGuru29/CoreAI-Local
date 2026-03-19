@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     server_mode: str = Field(default="offline-local")
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000, ge=1, le=65535)
+    auth_enabled: bool = Field(default=False)
+    auth_api_key: str = Field(default="")
+    auth_exempt_paths: str = Field(default="/health,/info,/docs,/openapi.json,/redoc")
     log_level: str = Field(default="INFO")
     log_dir: str = Field(default="logs")
     log_file: str = Field(default="server.log")
@@ -50,9 +53,24 @@ class Settings(BaseSettings):
     def normalize_ollama_base_url(cls, value: str) -> str:
         return value.rstrip("/")
 
+    @field_validator("auth_api_key")
+    @classmethod
+    def normalize_auth_api_key(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_auth_settings(self):
+        if self.auth_enabled and not self.auth_api_key:
+            raise ValueError("AUTH_API_KEY must be set when AUTH_ENABLED=true")
+        return self
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def auth_exempt_path_list(self) -> list[str]:
+        return [path.strip() for path in self.auth_exempt_paths.split(",") if path.strip()]
 
 
 @lru_cache

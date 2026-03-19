@@ -9,7 +9,8 @@ from app.api.error_handlers import app_error_handler, validation_exception_handl
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
-from app.core.middleware import AccessLogMiddleware
+from app.core.middleware import AccessLogMiddleware, ApiKeyAuthMiddleware
+from app.services.auth import AuthService
 from app.services.request_guard import RequestGuardService
 from app.utils.errors import AppError
 
@@ -35,6 +36,11 @@ async def lifespan(application: FastAPI):
         settings.api_host,
         settings.api_port,
     )
+    if settings.auth_enabled:
+        logger.info(
+            "API key auth enabled for paths outside %s",
+            settings.auth_exempt_path_list,
+        )
     try:
         yield
     finally:
@@ -60,6 +66,14 @@ def create_app() -> FastAPI:
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["*"],
         )
+    application.add_middleware(
+        ApiKeyAuthMiddleware,
+        auth_service=AuthService(
+            enabled=settings.auth_enabled,
+            api_key=settings.auth_api_key,
+            exempt_paths=settings.auth_exempt_path_list,
+        ),
+    )
     application.add_middleware(AccessLogMiddleware)
     application.add_exception_handler(AppError, app_error_handler)
     application.add_exception_handler(Exception, app_error_handler)
