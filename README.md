@@ -172,6 +172,20 @@ AUTH_API_KEY=replace-with-a-long-local-secret
 AUTH_EXEMPT_PATHS=/health,/info,/docs,/openapi.json,/redoc
 ```
 
+Generate a strong random key:
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Paste the output as the value of `AUTH_API_KEY` in `.env`, then restart the service:
+
+```bash
+sudo systemctl restart coreai-local.service
+```
+
+The key is permanent — it stays the same across reboots and reconnects until you deliberately rotate it. The Mac app stores it in the macOS Keychain after the first save, so you only enter it once.
+
 Accepted request headers:
 
 - `X-API-Key: <your-secret>`
@@ -459,9 +473,67 @@ sudo systemctl status coreai-local.service
 
 Important: the included unit files are currently configured for this repository path and user. If you move the project, update the unit files before installing them.
 
-The included `coreai-local.service` binds Uvicorn to `127.0.0.1:8000` so it can sit safely behind a reverse proxy.
+The included `coreai-local.service` binds Uvicorn to `0.0.0.0:8000` so it is reachable from any device on the same LAN, including the Mac client.
 
 The included `ollama-local.service` also sets `OLLAMA_MODELS=/var/lib/ollama` so the service can reuse models already pulled into the local system store. If your machine stores models somewhere else, update that path before installing or restarting the unit.
+
+## Firewall
+
+If your Linux host runs a firewall (UFW is common on Arch/Ubuntu), you must open port 8000 so LAN clients can reach the gateway:
+
+```bash
+sudo ufw allow 8000/tcp comment "CoreAI Local API"
+sudo ufw status
+```
+
+Without this rule the service will respond fine on localhost but all inbound connections from other devices on the network will be silently dropped.
+
+## Connecting the Mac client
+
+Once the services are running and port 8000 is open, open the CoreAI Mac app, go to **Settings**, and fill in:
+
+| Field | Value |
+|---|---|
+| Base URL | `http://<linux-ip>:8000` |
+| API Key | your `AUTH_API_KEY` value from `.env` |
+
+Find your Linux IP:
+
+```bash
+ip -4 addr show | grep "inet " | grep -v 127.0.0.1
+```
+
+Example:
+
+```
+http://10.236.240.6:8000
+```
+
+Tap **Test Connection** — the app will hit `/health`, `/info`, and `/models` and go green if everything is reachable.
+
+Once saved the Mac app stores the base URL in UserDefaults and the API key in the macOS Keychain. Both persist across app restarts. On subsequent launches the app reconnects automatically with no manual input required.
+
+The services themselves auto-start on every Linux boot because they are enabled in systemd. There is nothing to start manually after initial setup.
+
+To manually start or stop the stack at any time:
+
+```bash
+# start
+sudo systemctl start ollama-local.service coreai-local.service
+
+# stop
+sudo systemctl stop coreai-local.service ollama-local.service
+
+# status
+sudo systemctl status coreai-local.service ollama-local.service --no-pager
+```
+
+Follow live logs:
+
+```bash
+journalctl -u coreai-local.service -f
+journalctl -u ollama-local.service -f
+```
 
 ## Preferred local HTTPS: Caddy
 
