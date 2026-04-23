@@ -9,7 +9,7 @@ Type=simple
 User=msfvenom
 WorkingDirectory=/run/media/msfvenom/28aa095f-4b10-4a14-8ba9-4f2570fb6ce2/CoreAI-Local
 EnvironmentFile=/run/media/msfvenom/28aa095f-4b10-4a14-8ba9-4f2570fb6ce2/CoreAI-Local/.env
-ExecStart=/run/media/msfvenom/28aa095f-4b10-4a14-8ba9-4f2570fb6ce2/CoreAI-Local/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+ExecStart=/run/media/msfvenom/28aa095f-4b10-4a14-8ba9-4f2570fb6ce2/CoreAI-Local/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5
 StandardOutput=journal
